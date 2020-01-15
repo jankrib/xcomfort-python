@@ -12,6 +12,21 @@ from Crypto.Random import get_random_bytes
 from Crypto.Util.Padding import unpad, pad
 from base64 import b64encode, b64decode
 
+def generateSalt():
+    alphabet = string.ascii_letters + string.digits
+    return  ''.join(secrets.choice(alphabet) for i in range(12))
+
+def hash(deviceId, authKey, salt):
+    hasher = SHA256.new()
+    hasher.update(deviceId)
+    hasher.update(authKey)
+    inner = hasher.hexdigest().encode()
+    hasher = SHA256.new()
+    hasher.update(salt)
+    hasher.update(inner)
+
+    return hasher.hexdigest()
+
 def _pad_string(value):
     length = len(value)
     pad_size = AES.block_size - (length % AES.block_size)
@@ -69,9 +84,41 @@ async def setup_secure_connection(ip_address, authkey):
                 connection = SecureBridgeConnection(ws, key, iv)
 
                 msg = await connection.receive()
-
+                
                 if msg['type_int'] != 17:
                     raise Exception('Failed to establish secure connection')
+
+                salt = generateSalt()
+                password = hash(deviceId.encode(), authkey.encode(), salt.encode())
+
+                await connection.send({
+                    "type_int":30,
+                    "mc":1,
+                    "payload":{
+                        "username":"default",
+                        "password":password,
+                        "salt": salt
+                        }
+                    })
+                
+                msg = await connection.receive()
+
+                if msg['type_int'] != 32:
+                    raise Exception("Login failed")
+
+                token = msg['payload']['token']
+                await connection.send({"type_int":33,"mc":2,"payload":{"token":token}})
+
+                msg = await connection.receive()# {"type_int":34,"mc":-1,"payload":{"valid":true,"remaining":8640000}}
+
+                await connection.send({"type_int":240,"mc":4,"payload":{}})
+
+                msg = await connection.receive()
+
+                if 'mc' in msg:
+                    await connection.send({"type_int":1,"ref":msg['mc']}) #ACK
+
+                #connection.start()
 
                 return connection
             except:
@@ -84,24 +131,42 @@ class SecureBridgeConnection:
         self.key = key
         self.iv = iv
 
+    def start(self):
+        self.task = asyncio.create_task(self.__pump())
+
     def __cipher(self):
         return AES.new(self.key, AES.MODE_CBC, self.iv)
 
-    async def close(self):
-        await self.websocket.close()
-    
-    async def receive(self):
-        msg = await self.websocket.receive()
-        msg = msg.data
-        ct = b64decode(msg)
-        msg = self.__cipher().decrypt(ct)
-        msg = msg.rstrip(b'\x00')
-        print(f"Received decrypted: {msg}")
+    def __decrypt(self, data):
+        ct = b64decode(data)
+        data = self.__cipher().decrypt(ct)
+        data = data.rstrip(b'\x00')
+        print(f"Received decrypted: {data}")
 
-        if not msg:
+        if not data:
             return {}
 
-        return json.loads(msg.decode())
+        return json.loads(data.decode())
+
+    async def __pump(self):
+        print('pump')
+        async for msg in self.websocket:
+            print('receive')
+            if msg.type == aiohttp.WSMsgType.TEXT:
+                result = self.__decrypt(msg.data)
+
+                if 'mc' in result:
+                    self.send({"type_int":1,"ref":result['mc']}) #ACK
+            elif msg.type == aiohttp.WSMsgType.ERROR:
+                break
+    
+    async def close(self):
+        await self.websocket.close()
+
+    async def receive(self):
+        msg = await self.websocket.receive()
+
+        return self.__decrypt(msg.data)
 
     async def send(self, data):
         msg = json.dumps(data) 
