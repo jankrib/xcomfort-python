@@ -32,7 +32,7 @@ def _pad_string(value):
     pad_size = AES.block_size - (length % AES.block_size)
     return value.ljust(length + pad_size, b'\x00')
 
-async def setup_secure_connection(ip_address, authkey):
+async def setup_secure_connection(session, ip_address, authkey):
     async def __receive(ws):
         msg = await ws.receive()
         msg = msg.data[:-1]
@@ -44,86 +44,90 @@ async def setup_secure_connection(ip_address, authkey):
         print(f"Send raw: {msg}")
         await ws.send_str(msg)
 
-    async with aiohttp.ClientSession() as session:
-        async with session.ws_connect(f"http://{ip_address}/") as ws:
-            try:
-                msg = await __receive(ws)
-                deviceId = msg['payload']['device_id']
-                connectionId = msg['payload']['connection_id']
-                
-                await __send(ws, {
-                    "type_int":11,
-                    "mc":-1,
-                    "payload":{
-                        "client_type":"shl-app",
-                        "client_id":"c956e43f999f8004",
-                        "client_version":"1.1.0",
-                        "connection_id":connectionId
-                        }
-                    })
+    ws = await session.ws_connect(f"http://{ip_address}/")
 
-                msg = await __receive(ws)
-                await __send(ws, {"type_int":14,"mc":-1})
+    try:
+        msg = await __receive(ws)
+        deviceId = msg['payload']['device_id']
+        connectionId = msg['payload']['connection_id']
+        
+        await __send(ws, {
+            "type_int":11,
+            "mc":-1,
+            "payload":{
+                "client_type":"shl-app",
+                "client_id":"c956e43f999f8004",
+                "client_version":"1.1.0",
+                "connection_id":connectionId
+                }
+            })
 
-                msg = await __receive(ws)
-                publicKey = msg['payload']['public_key']
+        msg = await __receive(ws)
+        await __send(ws, {"type_int":14,"mc":-1})
 
-                rsa = RSA.import_key(publicKey)
+        msg = await __receive(ws)
+        publicKey = msg['payload']['public_key']
 
-                key = get_random_bytes(32)
-                iv = get_random_bytes(16)
+        rsa = RSA.import_key(publicKey)
 
-                cipher = PKCS1_v1_5.new(rsa)
-                secret = b64encode(cipher.encrypt((key.hex() + ":::" + iv.hex()).encode()))
-                print(f"secret: {secret}")
-                secret = secret.decode()
-                print(f"secret: {secret}")
+        key = get_random_bytes(32)
+        iv = get_random_bytes(16)
 
-                await __send(ws, {"type_int":16,"mc":-1,"payload":{"secret": secret}})
+        cipher = PKCS1_v1_5.new(rsa)
+        secret = b64encode(cipher.encrypt((key.hex() + ":::" + iv.hex()).encode()))
+        print(f"secret: {secret}")
+        secret = secret.decode()
+        print(f"secret: {secret}")
 
-                connection = SecureBridgeConnection(ws, key, iv)
+        await __send(ws, {"type_int":16,"mc":-1,"payload":{"secret": secret}})
 
-                msg = await connection.receive()
-                
-                if msg['type_int'] != 17:
-                    raise Exception('Failed to establish secure connection')
+        connection = SecureBridgeConnection(ws, key, iv)
 
-                salt = generateSalt()
-                password = hash(deviceId.encode(), authkey.encode(), salt.encode())
+        # Start LOGIN
 
-                await connection.send({
-                    "type_int":30,
-                    "mc":1,
-                    "payload":{
-                        "username":"default",
-                        "password":password,
-                        "salt": salt
-                        }
-                    })
-                
-                msg = await connection.receive()
+        msg = await connection.receive()
+        
+        if msg['type_int'] != 17:
+            raise Exception('Failed to establish secure connection')
 
-                if msg['type_int'] != 32:
-                    raise Exception("Login failed")
+        salt = generateSalt()
+        password = hash(deviceId.encode(), authkey.encode(), salt.encode())
 
-                token = msg['payload']['token']
-                await connection.send({"type_int":33,"mc":2,"payload":{"token":token}})
+        await connection.send({
+            "type_int":30,
+            "mc":1,
+            "payload":{
+                "username":"default",
+                "password":password,
+                "salt": salt
+                }
+            })
+        
+        msg = await connection.receive()
 
-                msg = await connection.receive()# {"type_int":34,"mc":-1,"payload":{"valid":true,"remaining":8640000}}
+        if msg['type_int'] != 32:
+            raise Exception("Login failed")
 
-                await connection.send({"type_int":240,"mc":4,"payload":{}})
+        token = msg['payload']['token']
+        await connection.send({"type_int":33,"mc":2,"payload":{"token":token}})
 
-                msg = await connection.receive()
+        msg = await connection.receive()# {"type_int":34,"mc":-1,"payload":{"valid":true,"remaining":8640000}}
 
-                if 'mc' in msg:
-                    await connection.send({"type_int":1,"ref":msg['mc']}) #ACK
+        # Start INITIAL_DATA
 
-                #connection.start()
+        await connection.send({"type_int":240,"mc":4,"payload":{}})
 
-                return connection
-            except:
-                await ws.close()
-                raise
+        msg = await connection.receive()
+
+        if 'mc' in msg:
+            await connection.send({"type_int":1,"ref":msg['mc']}) #ACK
+
+        #connection.start()
+
+        return connection
+    except:
+        await ws.close()
+        raise
 
 class SecureBridgeConnection:
     def __init__(self, websocket, key, iv):
@@ -177,19 +181,21 @@ class SecureBridgeConnection:
         await self.websocket.send_str(msg)
 
 class Bridge:
-    def __init__(self, ip_address:str, authkey:str):
+    def __init__(self, ip_address:str, authkey:str, session):
         self.ip_address = ip_address
         self.authkey = authkey
+        self.session = session
+
         self.connection = None
 
     @staticmethod
-    async def connect(ip_address:str, authkey:str):
-        bc = Bridge(ip_address, authkey)
+    async def connect(ip_address:str, authkey:str, session):
+        bc = Bridge(ip_address, authkey, session)
         await bc.__connect()
         return bc
 
     async def __connect(self):
-        self.connection = await setup_secure_connection(self.ip_address, self.authkey)
+        self.connection = await setup_secure_connection(self.session, self.ip_address, self.authkey)
 
     async def close(self):
         if isinstance(self.connection, SecureBridgeConnection):
