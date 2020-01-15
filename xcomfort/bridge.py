@@ -20,7 +20,7 @@ class Bridge:
         self.__session = session
         self.__closeSession = closeSession
 
-        self.devices = {}
+        self.__devices = {}
         self.state = State.Initializing
         self.connection = None
         self.connection_subscription = None
@@ -45,7 +45,7 @@ class Bridge:
         return bridge
 
     def __add_device(self, device):
-        self.devices[device.deviceId] = device
+        self.__devices[device.deviceId] = device
 
     def __update_state_from_payload(self, payload):
         if 'lastItem' in payload:
@@ -85,4 +85,4 @@ class Bridge:
         while self.state == State.Initializing:
             await asyncio.sleep(0.1)
 
-        return self.devices
+        return self.__devices
