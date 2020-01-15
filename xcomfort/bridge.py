@@ -12,6 +12,8 @@ from Crypto.Random import get_random_bytes
 from Crypto.Util.Padding import unpad, pad
 from base64 import b64encode, b64decode
 
+from .devices import Light
+
 def generateSalt():
     alphabet = string.ascii_letters + string.digits
     return  ''.join(secrets.choice(alphabet) for i in range(12))
@@ -134,6 +136,8 @@ class SecureBridgeConnection:
         self.websocket = websocket
         self.key = key
         self.iv = iv
+        self.state = 'loading'
+        self.devices = {}
 
     def start(self):
         self.task = asyncio.create_task(self.__pump())
@@ -152,6 +156,25 @@ class SecureBridgeConnection:
 
         return json.loads(data.decode())
 
+    def __update_state_from_payload(self, payload):
+        if 'lastItem' in payload:
+            self.state = 'loaded'
+        
+        if 'devices' in payload:
+            for device in payload['devices']:
+                device_id = device['deviceId']
+                name = device['name']
+                dimmable = device['dimmable']
+
+                light = Light(device_id, name, dimmable)
+                light.switch = device['switch']
+                light.dimmvalue = device['dimmvalue']
+
+                self.__add_device(light)
+
+    def __add_device(self, device):
+        self.devices[device.deviceId] = device
+
     async def __pump(self):
         print('pump')
         async for msg in self.websocket:
@@ -161,6 +184,10 @@ class SecureBridgeConnection:
 
                 if 'mc' in result:
                     await self.send({"type_int":1,"ref":result['mc']}) #ACK
+                
+                if result['type_int'] == 300:
+                    self.__update_state_from_payload(result['payload'])
+                
             elif msg.type == aiohttp.WSMsgType.ERROR:
                 break
     
@@ -200,3 +227,10 @@ class Bridge:
     async def close(self):
         if isinstance(self.connection, SecureBridgeConnection):
             await self.connection.close()
+
+    async def get_devices(self):
+
+        while self.connection.state == 'loading':
+            await asyncio.sleep(0.1)
+
+        return self.connection.devices
