@@ -117,12 +117,12 @@ async def setup_secure_connection(session, ip_address, authkey):
 
         await connection.send({"type_int":240,"mc":4,"payload":{}})
 
-        msg = await connection.receive()
+        # msg = await connection.receive()
 
-        if 'mc' in msg:
-            await connection.send({"type_int":1,"ref":msg['mc']}) #ACK
+        # if 'mc' in msg:
+        #     await connection.send({"type_int":1,"ref":msg['mc']}) #ACK
 
-        #connection.start()
+        connection.start()
 
         return connection
     except:
@@ -160,7 +160,7 @@ class SecureBridgeConnection:
                 result = self.__decrypt(msg.data)
 
                 if 'mc' in result:
-                    self.send({"type_int":1,"ref":result['mc']}) #ACK
+                    await self.send({"type_int":1,"ref":result['mc']}) #ACK
             elif msg.type == aiohttp.WSMsgType.ERROR:
                 break
     
