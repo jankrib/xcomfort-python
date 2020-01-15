@@ -1,5 +1,4 @@
 
-
 class Light:
     def __init__(self, deviceId, name, dimmable):
         self.deviceId = deviceId
@@ -13,4 +12,3 @@ class Light:
 
     __repr__ = __str__
 
-    
