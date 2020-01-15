@@ -208,25 +208,34 @@ class SecureBridgeConnection:
         await self.websocket.send_str(msg)
 
 class Bridge:
-    def __init__(self, ip_address:str, authkey:str, session):
+    def __init__(self, ip_address:str, authkey:str, session, closeSession:bool):
         self.ip_address = ip_address
         self.authkey = authkey
-        self.session = session
+        self.__session = session
+        self.__closeSession = closeSession
 
         self.connection = None
 
     @staticmethod
-    async def connect(ip_address:str, authkey:str, session):
-        bc = Bridge(ip_address, authkey, session)
+    async def connect(ip_address:str, authkey:str, session = None):
+        closeSession = False
+        if session is None:
+            session = aiohttp.ClientSession()
+            closeSession = True
+
+        bc = Bridge(ip_address, authkey, session, closeSession)
         await bc.__connect()
         return bc
 
     async def __connect(self):
-        self.connection = await setup_secure_connection(self.session, self.ip_address, self.authkey)
+        self.connection = await setup_secure_connection(self.__session, self.ip_address, self.authkey)
 
     async def close(self):
         if isinstance(self.connection, SecureBridgeConnection):
             await self.connection.close()
+        
+        if self.__closeSession:
+            await self.__session.close()
 
     async def get_devices(self):
 
