@@ -4,7 +4,7 @@ import json
 import string
 import secrets
 import time
-import enum
+from enum import Enum
 from Crypto.Hash import SHA256
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP, PKCS1_v1_5, AES
@@ -13,6 +13,11 @@ from Crypto.Util.Padding import unpad, pad
 from base64 import b64encode, b64decode
 
 from .devices import Light
+
+class ConnectionState(Enum):
+    Initial = 1
+    Loading = 2
+    Loaded = 3
 
 def generateSalt():
     alphabet = string.ascii_letters + string.digits
@@ -115,15 +120,6 @@ async def setup_secure_connection(session, ip_address, authkey):
 
         msg = await connection.receive()# {"type_int":34,"mc":-1,"payload":{"valid":true,"remaining":8640000}}
 
-        # Start INITIAL_DATA
-
-        await connection.send({"type_int":240,"mc":4,"payload":{}})
-
-        # msg = await connection.receive()
-
-        # if 'mc' in msg:
-        #     await connection.send({"type_int":1,"ref":msg['mc']}) #ACK
-
         connection.start()
 
         return connection
@@ -136,10 +132,11 @@ class SecureBridgeConnection:
         self.websocket = websocket
         self.key = key
         self.iv = iv
-        self.state = 'loading'
+        self.state = ConnectionState.Initial
         self.devices = {}
 
     def start(self):
+        self.state = ConnectionState.Loading
         self.task = asyncio.create_task(self.__pump())
 
     def __cipher(self):
@@ -158,7 +155,7 @@ class SecureBridgeConnection:
 
     def __update_state_from_payload(self, payload):
         if 'lastItem' in payload:
-            self.state = 'loaded'
+            self.state = ConnectionState.Loaded
         
         if 'devices' in payload:
             for device in payload['devices']:
@@ -176,7 +173,8 @@ class SecureBridgeConnection:
         self.devices[device.deviceId] = device
 
     async def __pump(self):
-        print('pump')
+        await self.send({"type_int":240,"mc":4,"payload":{}})
+
         async for msg in self.websocket:
             print('receive')
             if msg.type == aiohttp.WSMsgType.TEXT:
@@ -223,9 +221,17 @@ class Bridge:
             session = aiohttp.ClientSession()
             closeSession = True
 
-        bc = Bridge(ip_address, authkey, session, closeSession)
-        await bc.__connect()
-        return bc
+        bridge = Bridge(ip_address, authkey, session, closeSession)
+
+        try:
+            await bridge.__connect()
+        except:
+            if closeSession:
+                await session.close()
+            
+            raise
+
+        return bridge
 
     async def __connect(self):
         self.connection = await setup_secure_connection(self.__session, self.ip_address, self.authkey)
@@ -239,7 +245,7 @@ class Bridge:
 
     async def get_devices(self):
 
-        while self.connection.state == 'loading':
+        while self.connection.state == ConnectionState.Loading:
             await asyncio.sleep(0.1)
 
         return self.connection.devices
