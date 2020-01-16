@@ -44,8 +44,11 @@ class Bridge:
 
         return bridge
 
+    async def switch_device(self, device_id, switch:bool):
+        await self.connection.send_message(Messages.ACTION_SWITCH_DEVICE, {"deviceId":device_id,"switch":switch})
+
     def __add_device(self, device):
-        self.__devices[device.deviceId] = device
+        self.__devices[device.device_id] = device
 
     def __update_state_from_payload(self, payload):
         if 'lastItem' in payload:

@@ -100,15 +100,11 @@ async def setup_secure_connection(session, ip_address, authkey):
         salt = generateSalt()
         password = hash(deviceId.encode(), authkey.encode(), salt.encode())
 
-        await connection.send({
-            "type_int":30,
-            "mc":1,
-            "payload":{
-                "username":"default",
-                "password":password,
-                "salt": salt
-                }
-            })
+        await connection.send_message(30, {
+            "username":"default",
+            "password":password,
+            "salt": salt
+        })
         
         msg = await connection.receive()
 
@@ -116,7 +112,7 @@ async def setup_secure_connection(session, ip_address, authkey):
             raise Exception("Login failed")
 
         token = msg['payload']['token']
-        await connection.send({"type_int":33,"mc":2,"payload":{"token":token}})
+        await connection.send_message(33,{"token":token})
 
         msg = await connection.receive()# {"type_int":34,"mc":-1,"payload":{"valid":true,"remaining":8640000}}
 
@@ -132,8 +128,10 @@ class SecureBridgeConnection:
         self.websocket = websocket
         self.key = key
         self.iv = iv
+
         self.state = ConnectionState.Initial
         self.__messageSubject = rx.subject.Subject()
+        self.mc = 0
 
         self.messages = self.__messageSubject.pipe(
             ops.as_observable()
@@ -160,7 +158,7 @@ class SecureBridgeConnection:
     
 
     async def __pump(self):
-        await self.send({"type_int":240,"mc":4,"payload":{}})
+        await self.send_message(240, {})
 
         async for msg in self.websocket:
             print('receive')
@@ -182,6 +180,10 @@ class SecureBridgeConnection:
         msg = await self.websocket.receive()
 
         return self.__decrypt(msg.data)
+    
+    async def send_message(self, message_type, payload):
+        self.mc += 1
+        await self.send({"type_int":message_type,"mc":self.mc,"payload":payload})
 
     async def send(self, data):
         msg = json.dumps(data) 
