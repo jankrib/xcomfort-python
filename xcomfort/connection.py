@@ -194,7 +194,7 @@ class SecureBridgeConnection:
         await self.websocket.send_str(msg)
 
     
-class Messages:    
+class Messages(Enum):    
     NACK = 0
     ACK = 1
     HEARTBEAT = 2

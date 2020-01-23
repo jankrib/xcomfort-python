@@ -50,7 +50,17 @@ class Bridge:
     def __add_device(self, device):
         self.__devices[device.device_id] = device
 
-    def __update_state_from_payload(self, payload):
+    def _handle_SET_DEVICE_STATE(self, payload):
+        # payload['deviceId']
+        # payload['dimmvalue']
+        # payload['switch']
+        device = self.__devices[payload['deviceId']]
+
+        if isinstance(device, Light):
+            device.switch = payload['switch']
+            device.dimmvalue = payload['dimmvalue']
+
+    def _handle_SET_ALL_DATA(self, payload):
         if 'lastItem' in payload:
             self.state = State.Ready
         
@@ -66,9 +76,16 @@ class Bridge:
 
                 self.__add_device(light)
 
+
+    def _handle_UNKNOWN(self, payload):
+        # print(f"Unknown package: {payload}")
+        pass
+
     def __onMessage(self, message):
-        if message['type_int'] == Messages.SET_ALL_DATA:
-            self.__update_state_from_payload(message['payload'])
+        method_name = '_handle_' + Messages(message['type_int']).name
+        method = getattr(self, method_name, lambda: self._handle_UNKNOWN)
+
+        method(message['payload'])
 
     async def __connect(self):
         self.connection = await setup_secure_connection(self.__session, self.ip_address, self.authkey)
