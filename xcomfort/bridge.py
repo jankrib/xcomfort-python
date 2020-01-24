@@ -51,9 +51,6 @@ class Bridge:
         self.__devices[device.device_id] = device
 
     def _handle_SET_DEVICE_STATE(self, payload):
-        # payload['deviceId']
-        # payload['dimmvalue']
-        # payload['switch']
         device = self.__devices[payload['deviceId']]
 
         if isinstance(device, Light):
