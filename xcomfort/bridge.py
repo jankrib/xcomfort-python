@@ -6,7 +6,7 @@ import rx
 import rx.operators as ops
 from enum import Enum
 from .connection import Messages, SecureBridgeConnection, setup_secure_connection
-from .devices import Light
+from .devices import (Light, LightState)
 
 class State(Enum):
     Initializing = 1
@@ -54,8 +54,7 @@ class Bridge:
         device = self.__devices[payload['deviceId']]
 
         if isinstance(device, Light):
-            device.switch = payload['switch']
-            device.dimmvalue = payload['dimmvalue']
+            device.state.on_next(LightState(payload['switch'], payload['dimmvalue']))
 
     def _handle_SET_ALL_DATA(self, payload):
         if 'lastItem' in payload:
@@ -66,10 +65,9 @@ class Bridge:
                 device_id = device['deviceId']
                 name = device['name']
                 dimmable = device['dimmable']
+                state = LightState(device['switch'], device['dimmvalue'])
 
-                light = Light(device_id, name, dimmable)
-                light.switch = device['switch']
-                light.dimmvalue = device['dimmvalue']
+                light = Light(self, device_id, name, dimmable, state)
 
                 self.__add_device(light)
 
