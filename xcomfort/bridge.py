@@ -72,13 +72,14 @@ class Bridge:
                 self.__add_device(light)
 
 
-    def _handle_UNKNOWN(self, payload):
-        # print(f"Unknown package: {payload}")
+    def _handle_UNKNOWN(self, message_type, payload):
+        print(f"Unhandled package [{message_type.name}]: {payload}")
         pass
 
     def __onMessage(self, message):
-        method_name = '_handle_' + Messages(message['type_int']).name
-        method = getattr(self, method_name, lambda: self._handle_UNKNOWN)
+        message_type = Messages(message['type_int'])
+        method_name = '_handle_' + message_type.name
+        method = getattr(self, method_name, lambda p: self._handle_UNKNOWN(message_type, p))
 
         method(message['payload'])
 

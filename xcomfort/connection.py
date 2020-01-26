@@ -161,7 +161,6 @@ class SecureBridgeConnection:
         await self.send_message(240, {})
 
         async for msg in self.websocket:
-            print('receive')
             if msg.type == aiohttp.WSMsgType.TEXT:
                 result = self.__decrypt(msg.data)
 
@@ -183,6 +182,10 @@ class SecureBridgeConnection:
     
     async def send_message(self, message_type, payload):
         self.mc += 1
+
+        if isinstance(message_type, Messages):
+            message_type = message_type.value
+
         await self.send({"type_int":message_type,"mc":self.mc,"payload":payload})
 
     async def send(self, data):
