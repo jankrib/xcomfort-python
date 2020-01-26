@@ -9,49 +9,58 @@ from .connection import Messages, SecureBridgeConnection, setup_secure_connectio
 from .devices import (Light, LightState)
 
 class State(Enum):
+    Uninitialized = 0
     Initializing = 1
     Ready = 2
+    Closing = 10
 
 
 class Bridge:
-    def __init__(self, ip_address:str, authkey:str, session, closeSession:bool):
+    def __init__(self, ip_address:str, authkey:str, session = None):
         self.ip_address = ip_address
         self.authkey = authkey
-        self.__session = session
-        self.__closeSession = closeSession
 
-        self.__devices = {}
-        self.state = State.Initializing
-        self.connection = None
-        self.connection_subscription = None
-
-    @staticmethod
-    async def connect(ip_address:str, authkey:str, session = None):
-        closeSession = False
         if session is None:
             session = aiohttp.ClientSession()
             closeSession = True
+        else:
+            closeSession = False
 
-        bridge = Bridge(ip_address, authkey, session, closeSession)
+        self._session = session
+        self._closeSession = closeSession
 
-        try:
-            await bridge.__connect()
-        except:
-            if closeSession:
-                await session.close()
-            
-            raise
+        self._devices = {}
+        self.state = State.Uninitialized
+        self.connection = None
+        self.connection_subscription = None
+  
+    async def run(self):
+        if self.state != State.Uninitialized:
+            raise Exception("Run can only be called once at a time")
 
-        return bridge
+        await self._connect()
+        await self.connection.pump()
+
+        while self.state != State.Closing:
+            try:
+                await self._connect()
+                await self.connection.pump()
+
+            except:
+                await asyncio.sleep(5)
+
+            self.connection_subscription.dispose()
+        
+        self.state = State.Uninitialized
 
     async def switch_device(self, device_id, switch:bool):
         await self.connection.send_message(Messages.ACTION_SWITCH_DEVICE, {"deviceId":device_id,"switch":switch})
 
-    def __add_device(self, device):
-        self.__devices[device.device_id] = device
+    def _add_device(self, device):
+        self._devices[device.device_id] = device
 
     def _handle_SET_DEVICE_STATE(self, payload):
-        device = self.__devices[payload['deviceId']]
+        device = self._devices[payload['deviceId']]
 
         if isinstance(device, Light):
             device.state.on_next(LightState(payload['switch'], payload['dimmvalue']))
@@ -69,36 +78,38 @@ class Bridge:
 
                 light = Light(self, device_id, name, dimmable, state)
 
-                self.__add_device(light)
+                self._add_device(light)
 
 
     def _handle_UNKNOWN(self, message_type, payload):
         print(f"Unhandled package [{message_type.name}]: {payload}")
         pass
 
-    def __onMessage(self, message):
+    def _onMessage(self, message):
         message_type = Messages(message['type_int'])
         method_name = '_handle_' + message_type.name
         method = getattr(self, method_name, lambda p: self._handle_UNKNOWN(message_type, p))
 
         method(message['payload'])
 
-    async def __connect(self):
-        self.connection = await setup_secure_connection(self.__session, self.ip_address, self.authkey)
-        self.connection_subscription = self.connection.messages.subscribe(self.__onMessage)
+    async def _connect(self):
+        self.connection = await setup_secure_connection(self._session, self.ip_address, self.authkey)
+        self.connection_subscription = self.connection.messages.subscribe(self._onMessage)
 
     async def close(self):
+        self.state = State.Closing
+
         if isinstance(self.connection, SecureBridgeConnection):
             self.connection_subscription.dispose()
             await self.connection.close()
 
         
-        if self.__closeSession:
-            await self.__session.close()
+        if self._closeSession:
+            await self._session.close()
 
     async def get_devices(self):
 
-        while self.state == State.Initializing:
+        while self.state != State.Ready:
             await asyncio.sleep(0.1)
 
-        return self.__devices
+        return self._devices

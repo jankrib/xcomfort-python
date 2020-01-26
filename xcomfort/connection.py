@@ -52,7 +52,7 @@ async def setup_secure_connection(session, ip_address, authkey):
         await ws.send_str(msg)
 
     ws = await session.ws_connect(f"http://{ip_address}/")
-
+    
     try:
         msg = await __receive(ws)
         deviceId = msg['payload']['device_id']
@@ -116,8 +116,6 @@ async def setup_secure_connection(session, ip_address, authkey):
 
         msg = await connection.receive()# {"type_int":34,"mc":-1,"payload":{"valid":true,"remaining":8640000}}
 
-        connection.start()
-
         return connection
     except:
         await ws.close()
@@ -137,10 +135,6 @@ class SecureBridgeConnection:
             ops.as_observable()
         )
 
-    def start(self):
-        self.state = ConnectionState.Loading
-        self.task = asyncio.create_task(self.__pump())
-
     def __cipher(self):
         return AES.new(self.key, AES.MODE_CBC, self.iv)
 
@@ -155,9 +149,9 @@ class SecureBridgeConnection:
 
         return json.loads(data.decode())
 
-    
+    async def pump(self):
+        self.state = ConnectionState.Loading
 
-    async def __pump(self):
         await self.send_message(240, {})
 
         async for msg in self.websocket:
