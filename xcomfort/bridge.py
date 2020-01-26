@@ -33,6 +33,7 @@ class Bridge:
         self.state = State.Uninitialized
         self.connection = None
         self.connection_subscription = None
+        self.logger = lambda x: print(x)
   
     async def run(self):
         if self.state != State.Uninitialized:
@@ -82,15 +83,18 @@ class Bridge:
 
 
     def _handle_UNKNOWN(self, message_type, payload):
-        print(f"Unhandled package [{message_type.name}]: {payload}")
+        self.logger(f"Unhandled package [{message_type.name}]: {payload}")
         pass
 
     def _onMessage(self, message):
-        message_type = Messages(message['type_int'])
-        method_name = '_handle_' + message_type.name
-        method = getattr(self, method_name, lambda p: self._handle_UNKNOWN(message_type, p))
+        if 'payload' in message:
+            message_type = Messages(message['type_int'])
+            method_name = '_handle_' + message_type.name
+            method = getattr(self, method_name, lambda p: self._handle_UNKNOWN(message_type, p))
+            method(message['payload'])
+        else:
+            self.logger(f"Not known: {message}")
 
-        method(message['payload'])
 
     async def _connect(self):
         self.connection = await setup_secure_connection(self._session, self.ip_address, self.authkey)
