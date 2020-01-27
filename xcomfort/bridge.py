@@ -39,9 +39,6 @@ class Bridge:
         if self.state != State.Uninitialized:
             raise Exception("Run can only be called once at a time")
 
-        await self._connect()
-        await self.connection.pump()
-
         while self.state != State.Closing:
             try:
                 await self._connect()
