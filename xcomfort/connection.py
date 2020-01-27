@@ -52,7 +52,7 @@ async def setup_secure_connection(session, ip_address, authkey):
         await ws.send_str(msg)
 
     ws = await session.ws_connect(f"http://{ip_address}/")
-    
+
     try:
         msg = await __receive(ws)
         deviceId = msg['payload']['device_id']
@@ -128,10 +128,10 @@ class SecureBridgeConnection:
         self.iv = iv
 
         self.state = ConnectionState.Initial
-        self.__messageSubject = rx.subject.Subject()
+        self._messageSubject = rx.subject.Subject()
         self.mc = 0
 
-        self.messages = self.__messageSubject.pipe(
+        self.messages = self._messageSubject.pipe(
             ops.as_observable()
         )
 
@@ -161,7 +161,8 @@ class SecureBridgeConnection:
                 if 'mc' in result:
                     await self.send({"type_int":1,"ref":result['mc']}) #ACK
                 
-                    self.__messageSubject.on_next(result)
+                if 'payload' in result:
+                    self._messageSubject.on_next(result)
 
             elif msg.type == aiohttp.WSMsgType.ERROR:
                 break
