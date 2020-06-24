@@ -23,6 +23,10 @@ class Light:
     async def switch(self, switch:bool):
         await self.bridge.switch_device(self.device_id, switch)
 
+    async def dimm(self, value:int):
+        value = max(0, min(99, value))
+        await self.bridge.dimm_device(self.device_id, value)
+
     def __str__(self):
         return f"Light({self.device_id}, \"{self.name}\", dimmable: {self.dimmable}, state:{self.state.value})"
 

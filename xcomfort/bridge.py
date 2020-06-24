@@ -39,6 +39,8 @@ class Bridge:
         if self.state != State.Uninitialized:
             raise Exception("Run can only be called once at a time")
 
+        self.state = State.Initializing
+
         while self.state != State.Closing:
             try:
                 await self._connect()
@@ -47,12 +49,16 @@ class Bridge:
             except:
                 await asyncio.sleep(5)
 
-            self.connection_subscription.dispose()
+            if self.connection_subscription is not None:
+                self.connection_subscription.dispose()
         
         self.state = State.Uninitialized
 
     async def switch_device(self, device_id, switch:bool):
         await self.connection.send_message(Messages.ACTION_SWITCH_DEVICE, {"deviceId":device_id,"switch":switch})
+
+    async def dimm_device(self, device_id, value:int):
+        await self.connection.send_message(Messages.ACTION_SLIDE_DEVICE, {"deviceId":device_id,"dimmvalue":value})
 
     def _add_device(self, device):
         self._devices[device.device_id] = device
@@ -109,8 +115,10 @@ class Bridge:
             await self._session.close()
 
     async def get_devices(self):
+        if self.state == State.Uninitialized:
+            await asyncio.sleep(0.1)
 
-        while self.state != State.Ready:
+        while self.state == State.Initializing:
             await asyncio.sleep(0.1)
 
         return self._devices
