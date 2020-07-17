@@ -88,7 +88,7 @@ async def setup_secure_connection(session, ip_address, authkey):
 
         await __send(ws, {"type_int":16,"mc":-1,"payload":{"secret": secret}})
 
-        connection = SecureBridgeConnection(ws, key, iv)
+        connection = SecureBridgeConnection(ws, key, iv, deviceId)
 
         # Start LOGIN
 
@@ -122,10 +122,11 @@ async def setup_secure_connection(session, ip_address, authkey):
         raise
 
 class SecureBridgeConnection:
-    def __init__(self, websocket, key, iv):
+    def __init__(self, websocket, key, iv, device_id):
         self.websocket = websocket
         self.key = key
         self.iv = iv
+        self.device_id = device_id
 
         self.state = ConnectionState.Initial
         self._messageSubject = rx.subject.Subject()
