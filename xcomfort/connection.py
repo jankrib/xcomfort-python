@@ -43,12 +43,12 @@ async def setup_secure_connection(session, ip_address, authkey):
     async def __receive(ws):
         msg = await ws.receive()
         msg = msg.data[:-1]
-        print(f"Received raw: {msg}")
+        # print(f"Received raw: {msg}")
         return json.loads(msg)
 
     async def __send(ws, data):
         msg = json.dumps(data) 
-        print(f"Send raw: {msg}")
+        # print(f"Send raw: {msg}")
         await ws.send_str(msg)
 
     ws = await session.ws_connect(f"http://{ip_address}/")
@@ -82,9 +82,9 @@ async def setup_secure_connection(session, ip_address, authkey):
 
         cipher = PKCS1_v1_5.new(rsa)
         secret = b64encode(cipher.encrypt((key.hex() + ":::" + iv.hex()).encode()))
-        print(f"secret: {secret}")
+        # print(f"secret: {secret}")
         secret = secret.decode()
-        print(f"secret: {secret}")
+        # print(f"secret: {secret}")
 
         await __send(ws, {"type_int":16,"mc":-1,"payload":{"secret": secret}})
 
@@ -143,7 +143,7 @@ class SecureBridgeConnection:
         ct = b64decode(data)
         data = self.__cipher().decrypt(ct)
         data = data.rstrip(b'\x00')
-        print(f"Received decrypted: {data}")
+        # print(f"Received decrypted: {data}")
 
         if not data:
             return {}
@@ -186,7 +186,7 @@ class SecureBridgeConnection:
 
     async def send(self, data):
         msg = json.dumps(data) 
-        print(f"Send raw: {msg}")
+        # print(f"Send raw: {msg}")
         msg = _pad_string(msg.encode())
         msg = self.__cipher().encrypt(msg)
         msg = b64encode(msg).decode() + '\u0004'

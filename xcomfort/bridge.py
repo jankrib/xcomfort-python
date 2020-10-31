@@ -33,7 +33,7 @@ class Bridge:
         self.state = State.Uninitialized
         self.connection = None
         self.connection_subscription = None
-        self.logger = lambda x: print(x)
+        self.logger = lambda x: None
   
     async def run(self):
         if self.state != State.Uninitialized:
@@ -43,10 +43,12 @@ class Bridge:
 
         while self.state != State.Closing:
             try:
+                self.logger(f"Connecting...")
                 await self._connect()
                 await self.connection.pump()
 
-            except:
+            except Exception as e:
+                self.logger(f"Error: {str(e)}")
                 await asyncio.sleep(5)
 
             if self.connection_subscription is not None:
