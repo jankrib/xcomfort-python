@@ -64,7 +64,7 @@ async def setup_secure_connection(session, ip_address, authkey):
             "payload":{
                 "client_type":"shl-app",
                 "client_id":"c956e43f999f8004",
-                "client_version":"1.2.0",
+                "client_version":"2.0.0",
                 "connection_id":connectionId
                 }
             })
@@ -116,6 +116,20 @@ async def setup_secure_connection(session, ip_address, authkey):
 
         msg = await connection.receive()# {"type_int":34,"mc":-1,"payload":{"valid":true,"remaining":8640000}}
 
+        # Renew token
+        await connection.send_message(37,{"token":token})
+
+        msg = await connection.receive()
+
+        if msg['type_int'] != 38:
+            raise Exception("Login failed")
+
+        token = msg['payload']['token']
+
+        await connection.send_message(33,{"token":token})
+
+        msg = await connection.receive()# {"type_int":34,"mc":-1,"payload":{"valid":true,"remaining":8640000}}
+
         return connection
     except:
         await ws.close()
@@ -154,6 +168,8 @@ class SecureBridgeConnection:
         self.state = ConnectionState.Loading
 
         await self.send_message(240, {})
+        await self.send_message(242, {})
+        await self.send_message(2, {})
 
         async for msg in self.websocket:
             if msg.type == aiohttp.WSMsgType.TEXT:
@@ -270,6 +286,18 @@ class Messages(Enum):
     ADD_COMP = 307
     SET_COMP_INFO = 308
     COMP_DELETED = 309
+    SET_STATE_INFO = 310
+    CONFIG_SAVED = 311
+    CONFIG_LIST = 312
+    RESTORE_CONFIG_RESPONSE = 313
+    SET_HEATING_PROGRAM = 350
+    DELETE_HEATING_PROGRAM = 351
+    SET_ROOM_HEATING = 352
+    SET_HEATING_STATE = 353
+    SET_HEATING_PROGRAM_ID = 360
+    HEATING_PROGRAM_DELETED = 362
+    SET_ROOM_HEATING_STATE = 363
+    SET_BRIDGE_STATE = 364
     IDLE = -1
     NACK_INFO_INVALID_ACTION = -98
     NACK_INFO_DEVICE_NOT_DIMMABLE = -99

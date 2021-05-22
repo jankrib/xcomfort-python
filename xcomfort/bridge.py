@@ -48,7 +48,7 @@ class Bridge:
                 await self.connection.pump()
 
             except Exception as e:
-                self.logger(f"Error: {str(e)}")
+                self.logger(f"Error: {repr(e)}")
                 await asyncio.sleep(5)
 
             if self.connection_subscription is not None:
@@ -70,6 +70,14 @@ class Bridge:
 
         if isinstance(device, Light):
             device.state.on_next(LightState(payload['switch'], payload['dimmvalue']))
+    
+    def _handle_SET_STATE_INFO(self, payload):
+        for item in payload['item']:
+            deviceId = item['deviceId']
+            device = self._devices[deviceId]
+
+            if isinstance(device, Light):
+                device.state.on_next(LightState(item['switch'], item['dimmvalue']))
 
     def _handle_SET_ALL_DATA(self, payload):
         if 'lastItem' in payload:
