@@ -85,9 +85,12 @@ class Bridge:
         
         if 'devices' in payload:
             for device in payload['devices']:
-                device_id = device['deviceId']
-                name = device['name']
-                dimmable = device['dimmable']
+                try:
+                    device_id = device['deviceId']
+                    name = device['name']
+                    dimmable = device['dimmable']
+                except KeyError:
+                    continue
                 state = LightState(device['switch'], device['dimmvalue'])
 
                 light = Light(self, device_id, name, dimmable, state)
