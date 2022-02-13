@@ -66,18 +66,24 @@ class Bridge:
         self._devices[device.device_id] = device
 
     def _handle_SET_DEVICE_STATE(self, payload):
-        device = self._devices[payload['deviceId']]
+        try:
+            device = self._devices[payload['deviceId']]
 
-        if isinstance(device, Light):
-            device.state.on_next(LightState(payload['switch'], payload['dimmvalue']))
+            if isinstance(device, Light):
+                device.state.on_next(LightState(payload['switch'], payload['dimmvalue']))
+        except KeyError:
+            return
     
     def _handle_SET_STATE_INFO(self, payload):
         for item in payload['item']:
-            deviceId = item['deviceId']
-            device = self._devices[deviceId]
+            try:
+                deviceId = item['deviceId']
+                device = self._devices[deviceId]
 
-            if isinstance(device, Light):
-                device.state.on_next(LightState(item['switch'], item['dimmvalue']))
+                if isinstance(device, Light):
+                    device.state.on_next(LightState(item['switch'], item['dimmvalue']))
+            except KeyError:
+                continue
 
     def _handle_SET_ALL_DATA(self, payload):
         if 'lastItem' in payload:
