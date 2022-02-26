@@ -20,4 +20,9 @@ setuptools.setup(
         "Development Status :: 2 - Pre-Alpha",
     ],
     python_requires='>=3.7',
+    install_requires=[
+        "aiohttp",
+        "rx",
+        "pycryptodome"
+    ],
 )
