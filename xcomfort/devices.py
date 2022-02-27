@@ -1,3 +1,4 @@
+from contextlib import nullcontext
 import rx
 
 class LightState:
@@ -12,13 +13,19 @@ class LightState:
 
 
 class Light:
-    def __init__(self, bridge, device_id, name, dimmable, state:LightState):
+    def __init__(self, bridge, device_id, name, dimmable):
         self.bridge = bridge
         self.device_id = device_id
         self.name = name
         self.dimmable = dimmable
 
-        self.state = rx.subject.BehaviorSubject(state)
+        self.state = rx.subject.BehaviorSubject(None)
+
+    def handle_state(self, payload):
+        switch = payload['switch']
+        dimmvalue = payload['dimmvalue'] if self.dimmable else 99
+
+        self.state.on_next(LightState(switch, dimmvalue))
 
     async def switch(self, switch:bool):
         await self.bridge.switch_device(self.device_id, switch)

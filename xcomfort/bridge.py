@@ -69,8 +69,7 @@ class Bridge:
         try:
             device = self._devices[payload['deviceId']]
 
-            if isinstance(device, Light):
-                device.state.on_next(LightState(payload['switch'], payload['dimmvalue']))
+            device.handle_state(payload)
         except KeyError:
             return
     
@@ -80,8 +79,7 @@ class Bridge:
                 deviceId = item['deviceId']
                 device = self._devices[deviceId]
 
-                if isinstance(device, Light):
-                    device.state.on_next(LightState(item['switch'], item['dimmvalue']))
+                device.handle_state(item)
             except KeyError:
                 continue
 
@@ -97,9 +95,9 @@ class Bridge:
                     dimmable = device['dimmable']
                 except KeyError:
                     continue
-                state = LightState(device['switch'], device['dimmvalue'])
 
-                light = Light(self, device_id, name, dimmable, state)
+                light = Light(self, device_id, name, dimmable)
+                device.handle_state(device)
 
                 self._add_device(light)
 
@@ -109,9 +107,11 @@ class Bridge:
         pass
 
     def _onMessage(self, message):
+        
         if 'payload' in message:
             message_type = Messages(message['type_int'])
             method_name = '_handle_' + message_type.name
+            
             method = getattr(self, method_name, lambda p: self._handle_UNKNOWN(message_type, p))
             try:
                 method(message['payload'])
@@ -119,6 +119,7 @@ class Bridge:
                 self.logger(f"Unknown error with: {method_name}")
         else:
             self.logger(f"Not known: {message}")
+
 
 
     async def _connect(self):
