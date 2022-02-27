@@ -6,7 +6,7 @@ import rx
 import rx.operators as ops
 from enum import Enum
 from .connection import Messages, SecureBridgeConnection, setup_secure_connection
-from .devices import (Light, LightState)
+from .devices import (Light, LightState, RcTouch)
 
 class State(Enum):
     Uninitialized = 0
@@ -83,23 +83,45 @@ class Bridge:
             except KeyError:
                 continue
 
+    def _create_device_from_payload(self, payload):
+        device_id = payload['deviceId']
+        name = payload['name']
+        dev_type = payload["devType"]
+
+        if dev_type == 100 or dev_type == 101:
+            dimmable = payload['dimmable']
+            return Light(self, device_id, name, dimmable)
+            
+        if dev_type == 450:
+            return RcTouch(self, device_id, name)
+        
+        return None #TODO Create an unknown device
+
+    def _handle_device_payload(self, payload):
+        device_id = payload['deviceId']
+
+        device = self._devices.get(device_id)
+
+        if device is None:
+            device = self._create_device_from_payload(payload)
+
+            if device is None:
+                return
+            
+            self._add_device(device)
+
+        device.handle_state(payload)
+
     def _handle_SET_ALL_DATA(self, payload):
         if 'lastItem' in payload:
             self.state = State.Ready
         
         if 'devices' in payload:
-            for device in payload['devices']:
+            for device_payload in payload['devices']:              
                 try:
-                    device_id = device['deviceId']
-                    name = device['name']
-                    dimmable = device['dimmable']
-                except KeyError:
-                    continue
-
-                light = Light(self, device_id, name, dimmable)
-                device.handle_state(device)
-
-                self._add_device(light)
+                    self._handle_device_payload(device_payload)
+                except Exception as e:
+                    self.logger(f"Failed to handle device payload: {str(e)}")
 
 
     def _handle_UNKNOWN(self, message_type, payload):
@@ -115,8 +137,8 @@ class Bridge:
             method = getattr(self, method_name, lambda p: self._handle_UNKNOWN(message_type, p))
             try:
                 method(message['payload'])
-            except:
-                self.logger(f"Unknown error with: {method_name}")
+            except Exception as e:
+                self.logger(f"Unknown error with: {method_name}: {str(e)}")
         else:
             self.logger(f"Not known: {message}")
 

@@ -39,3 +39,31 @@ class Light:
 
     __repr__ = __str__
 
+
+class RcTouchState:
+    def __init__(self, temperature, humidity):
+        self.temperature = temperature
+        self.humidity = humidity
+
+    def __str__(self):
+        return f"RcTouchState({self.temperature}, {self.humidity})"
+
+    __repr__ = __str__
+
+class RcTouch:
+    def __init__(self, bridge, device_id, name):
+        self.bridge = bridge
+        self.device_id = device_id
+        self.name = name
+
+        self.state = rx.subject.BehaviorSubject(None)
+
+    def handle_state(self, payload):
+        if 'info' in payload:
+            for info in payload['info']:
+                if info['text'] == "1222":
+                    temperature = float(info['value'])
+                if info['text'] == "1223":
+                    humidity = float(info['value'])
+        
+        self.state.on_next(RcTouchState(temperature, humidity))
