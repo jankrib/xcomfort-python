@@ -113,7 +113,10 @@ class Bridge:
             message_type = Messages(message['type_int'])
             method_name = '_handle_' + message_type.name
             method = getattr(self, method_name, lambda p: self._handle_UNKNOWN(message_type, p))
-            method(message['payload'])
+            try:
+                method(message['payload'])
+            except:
+                self.logger(f"Unknown error with: {method_name}")
         else:
             self.logger(f"Not known: {message}")
 
