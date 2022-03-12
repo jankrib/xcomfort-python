@@ -64,14 +64,14 @@ async def setup_secure_connection(session, ip_address, authkey):
             "payload":{
                 "client_type":"shl-app",
                 "client_id":"c956e43f999f8004",
-                "client_version":"3.0.0",
+                "client_version":"2.0.0",
                 "connection_id":connectionId
                 }
             })
 
         msg = await __receive(ws)
 
-        if msg['type_int'] != Messages.CONNECTION_DECLINED:
+        if msg['type_int'] == 13:
             raise Exception(msg["payload"]["error_message"])
 
         await __send(ws, {"type_int":14,"mc":-1})
