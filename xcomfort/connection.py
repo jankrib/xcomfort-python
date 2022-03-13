@@ -5,7 +5,7 @@ import string
 import secrets
 import time
 import rx
-from enum import Enum
+from enum import IntEnum
 from Crypto.Hash import SHA256
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP, PKCS1_v1_5, AES
@@ -14,7 +14,7 @@ from Crypto.Util.Padding import unpad, pad
 from base64 import b64encode, b64decode
 import rx.operators as ops
 
-class ConnectionState(Enum):
+class ConnectionState(IntEnum):
     Initial = 1
     Loading = 2
     Loaded = 3
@@ -213,7 +213,7 @@ class SecureBridgeConnection:
         await self.websocket.send_str(msg)
 
     
-class Messages(Enum):    
+class Messages(IntEnum):    
     NACK = 0
     ACK = 1
     HEARTBEAT = 2
