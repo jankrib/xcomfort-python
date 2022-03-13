@@ -71,7 +71,7 @@ async def setup_secure_connection(session, ip_address, authkey):
 
         msg = await __receive(ws)
 
-        if msg['type_int'] != Messages.CONNECTION_DECLINED:
+        if msg['type_int'] == 13:
             raise Exception(msg["payload"]["error_message"])
 
         await __send(ws, {"type_int":14,"mc":-1})
