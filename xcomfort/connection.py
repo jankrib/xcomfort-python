@@ -64,7 +64,7 @@ async def setup_secure_connection(session, ip_address, authkey):
             "payload":{
                 "client_type":"shl-app",
                 "client_id":"c956e43f999f8004",
-                "client_version":"2.0.0",
+                "client_version":"3.0.0",
                 "connection_id":connectionId
                 }
             })
