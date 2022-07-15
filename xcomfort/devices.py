@@ -67,3 +67,14 @@ class RcTouch:
                     humidity = float(info['value'])
         
         self.state.on_next(RcTouchState(temperature, humidity))
+
+class UnknownDevice:
+    def __init__(self, bridge, device_id, name):
+        self.bridge = bridge
+        self.device_id = device_id
+        self.name = name
+
+        self.state = rx.subject.BehaviorSubject(None)
+    
+    def handle_state(self, payload):
+        pass
