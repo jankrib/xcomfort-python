@@ -5,8 +5,10 @@ import time
 import rx
 import rx.operators as ops
 from enum import Enum
-from .connection import Messages, SecureBridgeConnection, setup_secure_connection
+from .connection import SecureBridgeConnection, setup_secure_connection
+from .messages import Messages
 from .devices import (Light, LightState, RcTouch)
+
 
 class State(Enum):
     Uninitialized = 0
@@ -16,7 +18,7 @@ class State(Enum):
 
 
 class Bridge:
-    def __init__(self, ip_address:str, authkey:str, session = None):
+    def __init__(self, ip_address: str, authkey: str, session=None):
         self.ip_address = ip_address
         self.authkey = authkey
 
@@ -34,7 +36,7 @@ class Bridge:
         self.connection = None
         self.connection_subscription = None
         self.logger = lambda x: None
-  
+
     async def run(self):
         if self.state != State.Uninitialized:
             raise Exception("Run can only be called once at a time")
@@ -53,14 +55,21 @@ class Bridge:
 
             if self.connection_subscription is not None:
                 self.connection_subscription.dispose()
-        
+
         self.state = State.Uninitialized
 
-    async def switch_device(self, device_id, switch:bool):
-        await self.connection.send_message(Messages.ACTION_SWITCH_DEVICE, {"deviceId":device_id,"switch":switch})
+    async def switch_device(self, device_id, message):
+        payload = {"deviceId": device_id}
+        payload.update(message)
+        await self.send_message(Messages.ACTION_SWITCH_DEVICE, payload)
 
-    async def dimm_device(self, device_id, value:int):
-        await self.connection.send_message(Messages.ACTION_SLIDE_DEVICE, {"deviceId":device_id,"dimmvalue":value})
+    async def slide_device(self, device_id, message):
+        payload = {"deviceId": device_id}
+        payload.update(message)
+        await self.send_message(Messages.ACTION_SLIDE_DEVICE, payload)
+
+    async def send_message(self, message_type: Messages, message):
+        await self.connection.send_message(message_type, message)
 
     def _add_device(self, device):
         self._devices[device.device_id] = device
@@ -72,7 +81,7 @@ class Bridge:
             device.handle_state(payload)
         except KeyError:
             return
-    
+
     def _handle_SET_STATE_INFO(self, payload):
         for item in payload['item']:
             try:
@@ -91,11 +100,11 @@ class Bridge:
         if dev_type == 100 or dev_type == 101:
             dimmable = payload['dimmable']
             return Light(self, device_id, name, dimmable)
-            
+
         if dev_type == 450:
             return RcTouch(self, device_id, name)
-        
-        return None #TODO Create an unknown device
+
+        return None  # TODO Create an unknown device
 
     def _handle_device_payload(self, payload):
         device_id = payload['deviceId']
@@ -107,7 +116,7 @@ class Bridge:
 
             if device is None:
                 return
-            
+
             self._add_device(device)
 
         device.handle_state(payload)
@@ -115,26 +124,26 @@ class Bridge:
     def _handle_SET_ALL_DATA(self, payload):
         if 'lastItem' in payload:
             self.state = State.Ready
-        
+
         if 'devices' in payload:
-            for device_payload in payload['devices']:              
+            for device_payload in payload['devices']:
                 try:
                     self._handle_device_payload(device_payload)
                 except Exception as e:
                     self.logger(f"Failed to handle device payload: {str(e)}")
-
 
     def _handle_UNKNOWN(self, message_type, payload):
         self.logger(f"Unhandled package [{message_type.name}]: {payload}")
         pass
 
     def _onMessage(self, message):
-        
+
         if 'payload' in message:
             message_type = Messages(message['type_int'])
             method_name = '_handle_' + message_type.name
-            
-            method = getattr(self, method_name, lambda p: self._handle_UNKNOWN(message_type, p))
+
+            method = getattr(self, method_name,
+                             lambda p: self._handle_UNKNOWN(message_type, p))
             try:
                 method(message['payload'])
             except Exception as e:
@@ -142,11 +151,10 @@ class Bridge:
         else:
             self.logger(f"Not known: {message}")
 
-
-
     async def _connect(self):
         self.connection = await setup_secure_connection(self._session, self.ip_address, self.authkey)
-        self.connection_subscription = self.connection.messages.subscribe(self._onMessage)
+        self.connection_subscription = self.connection.messages.subscribe(
+            self._onMessage)
 
     async def close(self):
         self.state = State.Closing
@@ -155,7 +163,6 @@ class Bridge:
             self.connection_subscription.dispose()
             await self.connection.close()
 
-        
         if self._closeSession:
             await self._session.close()
 

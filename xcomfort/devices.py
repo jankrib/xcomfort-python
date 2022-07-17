@@ -1,6 +1,7 @@
 from contextlib import nullcontext
 import rx
 
+
 class LightState:
     def __init__(self, switch, dimmvalue):
         self.switch = switch
@@ -27,12 +28,12 @@ class Light:
 
         self.state.on_next(LightState(switch, dimmvalue))
 
-    async def switch(self, switch:bool):
-        await self.bridge.switch_device(self.device_id, switch)
+    async def switch(self, switch: bool):
+        await self.bridge.switch_device(self.device_id, {"switch": switch})
 
-    async def dimm(self, value:int):
+    async def dimm(self, value: int):
         value = max(0, min(99, value))
-        await self.bridge.dimm_device(self.device_id, value)
+        await self.bridge.slide_device(self.device_id, {"dimmvalue": value})
 
     def __str__(self):
         return f"Light({self.device_id}, \"{self.name}\", dimmable: {self.dimmable}, state:{self.state.value})"
@@ -50,6 +51,7 @@ class RcTouchState:
 
     __repr__ = __str__
 
+
 class RcTouch:
     def __init__(self, bridge, device_id, name):
         self.bridge = bridge
@@ -65,8 +67,12 @@ class RcTouch:
                     temperature = float(info['value'])
                 if info['text'] == "1223":
                     humidity = float(info['value'])
-        
+
         self.state.on_next(RcTouchState(temperature, humidity))
+    
+    async def set(self, value: float):
+        await self.bridge.slide_device(self.device_id, {"setpoint": value})
+
 
 class UnknownDevice:
     def __init__(self, bridge, device_id, name):
@@ -75,6 +81,6 @@ class UnknownDevice:
         self.name = name
 
         self.state = rx.subject.BehaviorSubject(None)
-    
+
     def handle_state(self, payload):
         pass
