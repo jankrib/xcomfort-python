@@ -7,7 +7,7 @@ import rx.operators as ops
 from enum import Enum
 from .connection import SecureBridgeConnection, setup_secure_connection
 from .messages import Messages
-from .devices import (Light, LightState, RcTouch)
+from .devices import (BridgeDevice, Light, LightState, RcTouch, Heater)
 
 
 class State(Enum):
@@ -16,6 +16,17 @@ class State(Enum):
     Ready = 2
     Closing = 10
 
+class Comp:
+    def __init__(self, bridge, comp_id, comp_type, name: str):
+        self.bridge = bridge
+        self.comp_id = comp_id
+        self.comp_type = comp_type
+        self.name = name
+    
+    def __str__(self):
+        return f"Comp({self.comp_id}, \"{self.name}\", comp_type: {self.comp_type})"
+
+    __repr__ = __str__
 
 class Bridge:
     def __init__(self, ip_address: str, authkey: str, session=None):
@@ -32,6 +43,7 @@ class Bridge:
         self._closeSession = closeSession
 
         self._devices = {}
+        self._comps = {}
         self.state = State.Uninitialized
         self.connection = None
         self.connection_subscription = None
@@ -73,6 +85,9 @@ class Bridge:
 
     def _add_device(self, device):
         self._devices[device.device_id] = device
+    
+    def _add_comp(self, comp):
+        self._comps[comp.comp_id] = comp
 
     def _handle_SET_DEVICE_STATE(self, payload):
         try:
@@ -96,16 +111,42 @@ class Bridge:
         device_id = payload['deviceId']
         name = payload['name']
         dev_type = payload["devType"]
+        comp_id = payload["compId"]
 
         if dev_type == 100 or dev_type == 101:
             dimmable = payload['dimmable']
             return Light(self, device_id, name, dimmable)
 
+        if dev_type == 440:
+            return Heater(self, device_id, name, comp_id)
+
         if dev_type == 450:
-            return RcTouch(self, device_id, name)
+            return RcTouch(self, device_id, name, comp_id)
 
-        return None  # TODO Create an unknown device
+        return BridgeDevice(self, device_id, name)
+    
+    def _create_comp_from_payload(self, payload):
+        comp_id = payload['compId']
+        name = payload['name']
+        comp_type = payload["compType"]
 
+        return Comp(self, comp_id, comp_type, name)
+
+    def _handle_comp_payload(self, payload):
+        comp_id = payload['compId']
+
+        comp = self._comps.get(comp_id)
+
+        if comp is None:
+            comp = self._create_comp_from_payload(payload)
+
+            if comp is None:
+                return
+
+            self._add_comp(comp)
+
+        comp.handle_state(payload)
+    
     def _handle_device_payload(self, payload):
         device_id = payload['deviceId']
 
@@ -131,6 +172,13 @@ class Bridge:
                     self._handle_device_payload(device_payload)
                 except Exception as e:
                     self.logger(f"Failed to handle device payload: {str(e)}")
+        
+        if 'comps' in payload:
+            for comp_payload in payload["comps"]:
+                try:
+                    self._handle_comp_payload(comp_payload)
+                except Exception as e:
+                    self.logger(f"Failed to handle comp payload: {str(e)}")
 
     def _handle_UNKNOWN(self, message_type, payload):
         self.logger(f"Unhandled package [{message_type.name}]: {payload}")
@@ -139,6 +187,7 @@ class Bridge:
     def _onMessage(self, message):
 
         if 'payload' in message:
+            #self.logger(f"Message: {message}")
             message_type = Messages(message['type_int'])
             method_name = '_handle_' + message_type.name
 
@@ -166,11 +215,21 @@ class Bridge:
         if self._closeSession:
             await self._session.close()
 
-    async def get_devices(self):
+    async def wait_for_initialization(self):
         if self.state == State.Uninitialized:
             await asyncio.sleep(0.1)
 
         while self.state == State.Initializing:
             await asyncio.sleep(0.1)
+
+        return
+
+    async def get_comps(self):
+        await self.wait_for_initialization()
+
+        return self._comps
+
+    async def get_devices(self):
+        await self.wait_for_initialization()
 
         return self._devices
