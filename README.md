@@ -34,3 +34,8 @@ async def main():
 asyncio.run(main())
 
 ```
+
+## Tests
+```python
+python -m pytest
+```
