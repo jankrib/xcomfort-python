@@ -61,6 +61,11 @@ async def setup_secure_connection(session, ip_address, authkey):
 
     try:
         msg = await __receive(ws)
+
+        #{'type_int': 0, 'ref': -1, 'info': 'no client-connection available (all used)!'}
+        if msg['type_int'] == Messages.NACK:
+            raise Exception(msg["info"])
+
         deviceId = msg['payload']['device_id']
         connectionId = msg['payload']['connection_id']
 
