@@ -78,6 +78,10 @@ class Room:
 
         self.state.on_next(RoomState(setpoint,temperature,humidity,power,payload))
     
+    async def set_target_temperature(self, setpoint: float):
+        # {"type_int":353,"mc":9,"payload":{"roomId":8,"mode":3,"state":2,"setpoint":32.001,"confirmed":false}}
+        await self.bridge.send_message(Messages.SET_HEATING_STATE, {"roomId":self.room_id,"mode":3,"state":2,"setpoint":setpoint,"confirmed":False})
+    
     def __str__(self):
         return f"Room({self.comp_id}, \"{self.name}\", comp_type: {self.comp_type})"
 
