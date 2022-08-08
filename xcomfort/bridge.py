@@ -83,7 +83,7 @@ class Room:
         await self.bridge.send_message(Messages.SET_HEATING_STATE, {"roomId":self.room_id,"mode":3,"state":2,"setpoint":setpoint,"confirmed":False})
     
     def __str__(self):
-        return f"Room({self.comp_id}, \"{self.name}\", comp_type: {self.comp_type})"
+        return f"Room({self.room_id}, \"{self.name}\")"
 
     __repr__ = __str__
 
