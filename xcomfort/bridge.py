@@ -7,7 +7,7 @@ import rx.operators as ops
 from enum import Enum
 from .connection import SecureBridgeConnection, setup_secure_connection
 from .messages import Messages
-from .devices import (BridgeDevice, Light, RcTouch, Heater)
+from .devices import (BridgeDevice, Light, RcTouch, Heater, Shade)
 
 
 class State(Enum):
@@ -117,7 +117,7 @@ class Bridge:
 
         while self.state != State.Closing:
             try:
-                self.logger(f"Connecting...")
+                #self.logger(f"Connecting...")
                 await self._connect()
                 await self.connection.pump()
 
@@ -196,6 +196,9 @@ class Bridge:
         if dev_type == 100 or dev_type == 101:
             dimmable = payload['dimmable']
             return Light(self, device_id, name, dimmable)
+
+        if dev_type == 102:
+            return Shade(self, device_id, name, comp_id)
 
         if dev_type == 440:
             return Heater(self, device_id, name, comp_id)
