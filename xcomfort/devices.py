@@ -1,12 +1,13 @@
 from contextlib import nullcontext
 import rx
+from .messages import Messages
 
 class DeviceState:
     def __init__(self, payload):
-        self.payload = payload
+        self.raw = payload
 
     def __str__(self):
-        return f"DeviceState({self.payload})"
+        return f"DeviceState({self.raw})"
 
 class LightState(DeviceState):
     def __init__(self, switch, dimmvalue, payload):
@@ -103,9 +104,6 @@ class RcTouch(BridgeDevice):
                     humidity = float(info['value'])
 
         self.state.on_next(RcTouchState(temperature, humidity, payload))
-    
-    async def set(self, value: float):
-        await self.bridge.slide_device(self.device_id, {"setpoint": value})
 
 
 class Heater(BridgeDevice):
@@ -114,4 +112,20 @@ class Heater(BridgeDevice):
 
         self.comp_id = comp_id
 
+class Shade(BridgeDevice):
+    def __init__(self, bridge, device_id, name, comp_id):
+        BridgeDevice.__init__(self, bridge, device_id, name)
 
+        self.comp_id = comp_id
+    
+    async def send_state(self, state):
+        await self.bridge.send_message(Messages.SET_DEVICE_SHADING_STATE, {"deviceId":self.device_id,"state":state})
+    
+    async def move_down(self):
+        await self.send_state(1)
+    
+    async def move_up(self):
+        await self.send_state(3)
+    
+    async def move_stop(self):
+        await self.send_state(2)
