@@ -1,3 +1,4 @@
+from unicodedata import numeric
 import aiohttp
 import asyncio
 import string
@@ -16,6 +17,20 @@ class State(Enum):
     Ready = 2
     Closing = 10
 
+class RctMode(Enum):
+    Cool = 1
+    Eco = 2
+    Comfort = 3
+
+class RctState(Enum):
+    Idle = 0
+    Active = 2
+
+class RctModeRange:
+    def __init__(self, min:float, max:float):
+        self.Min = min
+        self.Max = max
+
 class CompState:
     def __init__(self, raw):
         self.raw = raw
@@ -33,25 +48,27 @@ class Comp:
         self.name = name
 
         self.state = rx.subject.BehaviorSubject(None)
-    
+
     def handle_state(self, payload):
         self.state.on_next(CompState(payload))
-    
+
     def __str__(self):
         return f"Comp({self.comp_id}, \"{self.name}\", comp_type: {self.comp_type})"
 
     __repr__ = __str__
 
 class RoomState:
-    def __init__(self, setpoint, temperature, humidity, power,  raw):
+    def __init__(self, setpoint, temperature, humidity, power, mode:RctMode, state:RctState,  raw):
         self.setpoint = setpoint
         self.temperature = temperature
         self.humidity = humidity
         self.power = power
+        self.mode = mode
         self.raw = raw
+        self.rctstate = state
 
     def __str__(self):
-        return f"RoomState({self.setpoint}, {self.temperature}, {self.humidity}, {self.power})"
+        return f"RoomState({self.setpoint}, {self.temperature}, {self.humidity},{self.mode},{self.rctstate} {self.power})"
 
     __repr__ = __str__
 
@@ -60,9 +77,8 @@ class Room:
         self.bridge = bridge
         self.room_id = room_id
         self.name = name
-
         self.state = rx.subject.BehaviorSubject(None)
-    
+
     def handle_state(self, payload):
 
         old_state = self.state.value
@@ -75,13 +91,32 @@ class Room:
         temperature = payload.get('temp', None)
         humidity = payload.get('humidity', None)
         power = payload.get('power', 0.0)
+        if 'currentMode' in payload:                # When handling from _SET_ALL_DATA
+            mode = RctMode(payload.get('currentMode', None))
+        if 'mode' in payload:                       # When handling from _SET_STATE_INFO
+            mode = RctMode(payload.get('mode', None))
 
-        self.state.on_next(RoomState(setpoint,temperature,humidity,power,payload))
-    
+        currentstate = RctState(payload.get('state', None))
+
+        self.state.on_next(RoomState(setpoint,temperature,humidity,power,mode,currentstate,payload))
+
     async def set_target_temperature(self, setpoint: float):
-        # {"type_int":353,"mc":9,"payload":{"roomId":8,"mode":3,"state":2,"setpoint":32.001,"confirmed":false}}
-        await self.bridge.send_message(Messages.SET_HEATING_STATE, {"roomId":self.room_id,"mode":3,"state":2,"setpoint":setpoint,"confirmed":False})
-    
+
+        # Validate that new setpoint is within allowed ranges.
+        # if above/below allowed values, set to the edge value
+        setpointrange = self.bridge.rctsetpointallowedvalues[RctMode(self.state.value.mode)]
+
+        if setpointrange.Max < setpoint:
+            setpoint = setpointrange.Max
+
+        if setpoint < setpointrange.Min:
+            setpoint = setpointrange.Min
+
+        await self.bridge.send_message(Messages.SET_HEATING_STATE, {"roomId":self.room_id,"mode":self.state.value.mode.value,"state":self.state.value.rctstate.value,"setpoint":setpoint,"confirmed":False})
+
+    async def set_mode(self, mode:RctMode):
+        await self.bridge.send_message(Messages.SET_HEATING_STATE, {"roomId":self.room_id,"mode":mode.value,"state":self.state.value.rctstate.value,"setpoint":self.state.value.setpoint,"confirmed":False})
+
     def __str__(self):
         return f"Room({self.room_id}, \"{self.name}\")"
 
@@ -101,6 +136,12 @@ class Bridge:
         self._session = session
         self._closeSession = closeSession
 
+        # Values determined from using setpoint slider in app.
+        self.rctsetpointallowedvalues = dict({
+            RctMode.Cool: RctModeRange(5.0,20.0),
+            RctMode.Eco: RctModeRange(10.0,30.0),
+            RctMode.Comfort: RctModeRange(18.0,40.0)
+        })
         self._comps = {}
         self._devices = {}
         self._rooms = {}
@@ -142,13 +183,13 @@ class Bridge:
 
     async def send_message(self, message_type: Messages, message):
         await self.connection.send_message(message_type, message)
-    
+
     def _add_comp(self, comp):
         self._comps[comp.comp_id] = comp
 
     def _add_device(self, device):
         self._devices[device.device_id] = device
-    
+
     def _add_room(self, room):
         self._rooms[room.room_id] = room
 
@@ -166,17 +207,17 @@ class Bridge:
                 deviceId = item['deviceId']
                 device = self._devices[deviceId]
                 device.handle_state(item)
-            
+
             elif 'roomId' in item:
                 roomId = item['roomId']
                 room = self._rooms[roomId]
                 room.handle_state(item)
-            
+
             elif 'compId' in item:
                 compId = item['compId']
                 comp = self._comps[compId]
                 comp.handle_state(item)
-            
+
             else:
                 self.logger(f"Unknown state info: {payload}")
 
@@ -207,7 +248,7 @@ class Bridge:
             return RcTouch(self, device_id, name, comp_id)
 
         return BridgeDevice(self, device_id, name)
-    
+
     def _create_room_from_payload(self, payload):
         room_id = payload['roomId']
         name = payload['name']
@@ -228,7 +269,7 @@ class Bridge:
             self._add_comp(comp)
 
         comp.handle_state(payload)
-    
+
     def _handle_device_payload(self, payload):
         device_id = payload['deviceId']
 
@@ -243,7 +284,7 @@ class Bridge:
             self._add_device(device)
 
         device.handle_state(payload)
-    
+
     def _handle_room_payload(self, payload):
         room_id = payload['roomId']
 
@@ -269,21 +310,21 @@ class Bridge:
                     self._handle_device_payload(device_payload)
                 except Exception as e:
                     self.logger(f"Failed to handle device payload: {str(e)}")
-        
+
         if 'comps' in payload:
             for comp_payload in payload["comps"]:
                 try:
                     self._handle_comp_payload(comp_payload)
                 except Exception as e:
                     self.logger(f"Failed to handle comp payload: {str(e)}")
-        
+
         if 'rooms' in payload:
             for room_payload in payload["rooms"]:
                 try:
                     self._handle_room_payload(room_payload)
                 except Exception as e:
                     self.logger(f"Failed to handle room payload: {str(e)}")
-        
+
         if 'roomHeating' in payload:
             for room_payload in payload["roomHeating"]:
                 try:
@@ -344,7 +385,7 @@ class Bridge:
         await self.wait_for_initialization()
 
         return self._devices
-    
+
     async def get_rooms(self):
         await self.wait_for_initialization()
 
