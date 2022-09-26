@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="xcomfort",
-    version="0.0.18",
+    version="0.0.19",
     author="Jan Kristian Bjerke",
     author_email="jan.bjerke@gmail.com",
     description="Integration with Eaton xComfort Bridge",
