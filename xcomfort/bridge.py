@@ -78,6 +78,7 @@ class Room:
         self.room_id = room_id
         self.name = name
         self.state = rx.subject.BehaviorSubject(None)
+        self.modesetpoints = dict()
 
     def handle_state(self, payload):
 
@@ -96,6 +97,12 @@ class Room:
         if 'mode' in payload:                       # When handling from _SET_STATE_INFO
             mode = RctMode(payload.get('mode', None))
 
+        # When handling from _SET_ALL_DATA, we get the setpoints for each mode/preset
+        # Store these for later use
+        if 'modes' in payload:
+            for mode in payload["modes"]:
+                self.modesetpoints[RctMode(mode["mode"])] = float(mode["value"])
+
         currentstate = RctState(payload.get('state', None))
 
         self.state.on_next(RoomState(setpoint,temperature,humidity,power,mode,currentstate,payload))
@@ -112,10 +119,17 @@ class Room:
         if setpoint < setpointrange.Min:
             setpoint = setpointrange.Min
 
+        # Store new setpoint for current mode
+        self.modesetpoints[self.state.value.mode.value] = setpoint
+
         await self.bridge.send_message(Messages.SET_HEATING_STATE, {"roomId":self.room_id,"mode":self.state.value.mode.value,"state":self.state.value.rctstate.value,"setpoint":setpoint,"confirmed":False})
 
     async def set_mode(self, mode:RctMode):
-        await self.bridge.send_message(Messages.SET_HEATING_STATE, {"roomId":self.room_id,"mode":mode.value,"state":self.state.value.rctstate.value,"setpoint":self.state.value.setpoint,"confirmed":False})
+
+        #Find setpoint for the mode we are about to set, and use that
+        #When transmitting heating_state message.
+        newsetpoint = self.modesetpoints.get(mode)
+        await self.bridge.send_message(Messages.SET_HEATING_STATE, {"roomId":self.room_id,"mode":mode.value,"state":self.state.value.rctstate.value,"setpoint":newsetpoint,"confirmed":False})
 
     def __str__(self):
         return f"Room({self.room_id}, \"{self.name}\")"
