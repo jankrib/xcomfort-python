@@ -113,9 +113,10 @@ class Heater(BridgeDevice):
         self.comp_id = comp_id
 
 class Shade(BridgeDevice):
-    def __init__(self, bridge, device_id, name, comp_id):
+    def __init__(self, bridge, device_id, name, comp_id, payload):
         BridgeDevice.__init__(self, bridge, device_id, name)
 
+        self.payload = payload
         self.comp_id = comp_id
     
     async def send_state(self, state):
