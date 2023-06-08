@@ -41,11 +41,12 @@ class CompState:
     __repr__ = __str__
 
 class Comp:
-    def __init__(self, bridge, comp_id, comp_type, name: str):
+    def __init__(self, bridge, comp_id, comp_type, name: str, payload: dict):
         self.bridge = bridge
         self.comp_id = comp_id
         self.comp_type = comp_type
         self.name = name
+        self.payload = payload
 
         self.state = rx.subject.BehaviorSubject(None)
 
@@ -53,7 +54,7 @@ class Comp:
         self.state.on_next(CompState(payload))
 
     def __str__(self):
-        return f"Comp({self.comp_id}, \"{self.name}\", comp_type: {self.comp_type})"
+        return f'Comp({self.comp_id}, "{self.name}", comp_type: {self.comp_type}, payload: {self.payload})'
 
     __repr__ = __str__
 
@@ -240,7 +241,7 @@ class Bridge:
         name = payload['name']
         comp_type = payload["compType"]
 
-        return Comp(self, comp_id, comp_type, name)
+        return Comp(self, comp_id, comp_type, name, payload)
 
     def _create_device_from_payload(self, payload):
         device_id = payload['deviceId']
@@ -253,7 +254,7 @@ class Bridge:
             return Light(self, device_id, name, dimmable)
 
         if dev_type == 102:
-            return Shade(self, device_id, name, comp_id)
+            return Shade(self, device_id, name, comp_id, payload)
 
         if dev_type == 440:
             return Heater(self, device_id, name, comp_id)

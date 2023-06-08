@@ -98,3 +98,15 @@ class Messages(IntEnum):
     NACK_INFO_INVALID_ACTION = -98
     NACK_INFO_DEVICE_NOT_DIMMABLE = -99
     NACK_INFO_UNKNOWN_DEVICE = -100
+
+class ShadeOperationState(IntEnum):
+    OPEN = 0
+    CLOSE = 1
+    STOP = 2
+    STEP_DOWN = 3
+    STEP_UP = 4
+    GO_TO = 5
+    CALIBRATION = 10
+    LOCK = 11
+    UNLOCK = 12
+    QUIT = 13
