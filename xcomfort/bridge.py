@@ -23,7 +23,9 @@ class RctMode(Enum):
     Comfort = 3
 
 class RctState(Enum):
+    NotApplicable = -1
     Idle = 0
+    Auto = 1
     Active = 2
 
 class RctModeRange:
@@ -82,6 +84,7 @@ class Room:
         self.modesetpoints = dict()
 
     def handle_state(self, payload):
+        print(f"Room.handle_state: {payload}")
 
         old_state = self.state.value
 
@@ -104,7 +107,7 @@ class Room:
             for mode in payload["modes"]:
                 self.modesetpoints[RctMode(mode["mode"])] = float(mode["value"])
 
-        currentstate = RctState(payload.get('state', None))
+        currentstate = RctState(payload.get('state', -1))
 
         self.state.on_next(RoomState(setpoint,temperature,humidity,power,mode,currentstate,payload))
 
