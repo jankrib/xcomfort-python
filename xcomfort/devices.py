@@ -128,6 +128,8 @@ class RcTouch(BridgeDevice):
 
     def handle_state(self, payload):
         print(f"RcTouchState::: {payload}")
+        temperature = None
+        humidity = None
         if 'info' in payload:
             for info in payload['info']:
                 if info['text'] == "1222":
@@ -135,7 +137,8 @@ class RcTouch(BridgeDevice):
                 if info['text'] == "1223":
                     humidity = float(info['value'])
 
-        self.state.on_next(RcTouchState(temperature, humidity, payload))
+        if temperature is not None and humidity is not None:
+            self.state.on_next(RcTouchState(temperature, humidity, payload))
 
 
 class Heater(BridgeDevice):
